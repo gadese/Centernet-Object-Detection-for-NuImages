@@ -1,24 +1,10 @@
-import tensorflow.keras as keras
 import tensorflow as tf
 import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Dense, Activation, Input, Conv2D, BatchNormalization, Add, UpSampling2D, ZeroPadding2D, Lambda, Concatenate, Dropout, SpatialDropout2D
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.utils import get_file
 
-import numpy as np
-# from main import config
 from trainingconfig import config
-
-# class config:
-#     epochs = 1
-#     batch_size = 4
-#     num_classes = 3
-#     IMAGE_PATH = 'train/'
-#     lr = 1e-4
-#     seed = 42
-#     in_size = 512
-#     out_size = in_size//4
-#     bbox_img_size = 1024
 
 # # Centernet Model
 weights_path = get_file('centernet.hdf5',
@@ -188,7 +174,6 @@ def _nms(heat, kernel=3):
 
 def decode_ddd(regr, hm_, k, output_stride):
     hm = K.sigmoid(K.expand_dims(hm_[:,:,:,0])) #Might need to change this line to softmax when more classes
-    # regr = regr_
     hm = _nms(hm)
     hm_shape = K.shape(hm)
     regr_shape = K.shape(regr)
@@ -209,10 +194,9 @@ def decode_ddd(regr, hm_, k, output_stride):
 
         _regr = K.gather(_regr, _inds)
 
-        # _width = _regr[:,0] * 256
-        # _height = _regr[:,1] * 256
-        _width = _regr[:,0] * config.out_size#//2 #* config.out_size
-        _height = _regr[:,1] * config.out_size#//2 #* config.out_size
+
+        _width = _regr[:,0] * config.out_size#//2
+        _height = _regr[:,1] * config.out_size#//2
 
         _detection = K.stack([_xs, _ys, _scores, _classes, _width, _height], -1)
         return _detection

@@ -30,12 +30,10 @@ def regress_loss(y_true, y_pred): # Regression Loss
     regr_loss = mean_squared_error(regr, y_pred)
     loss = regr_loss
 
-    # return 0
     return loss
 
 def conf_loss(y_true, y_pred): # Heatmap Loss
     mask = y_true[:,:,:, 0:]#[:,:,:,np.newaxis]
-    # mask = y_true
     prediction = y_pred
 
     # Binary mask loss

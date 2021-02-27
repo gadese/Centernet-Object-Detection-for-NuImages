@@ -4,22 +4,11 @@ import cv2
 import tensorflow.keras as keras
 import matplotlib.pyplot as plt
 
-# from main import config
 from collections import namedtuple
 from typing import List, Union
 
 from trainingconfig import config
 
-# class new_config:
-#     epochs = 1
-#     batch_size = 4
-#     num_classes = 1#
-#     IMAGE_PATH = 'train/'
-#     lr = 1e-4
-#     seed = 42
-#     in_size = 512
-#     out_size = in_size//4
-#     bbox_img_size = (720, 1280)
 
 # # Utils
 def normalize_image(image):
@@ -33,7 +22,7 @@ def normalize_image(image):
     std = [0.2886383, 0.27408165, 0.27809834]
     return ((np.float32(image) / 255.) - mean) / std
 
-def get_boxes(bbox):#, config=new_config):
+def get_boxes(bbox):
     boxes = []
     for box in bbox:
         box = box[1:-1].split(',')
@@ -45,12 +34,10 @@ def get_boxes(bbox):#, config=new_config):
     boxes = boxes * config.in_size // config.bbox_img_size #BOXES CHANGED
     return boxes
 
-def heatmap(bbox, label):#, config=new_config):
+def heatmap(bbox, label):
     def get_coords(bbox):
         xs,ys,w,h=[],[],[],[]
         for box in bbox:
-            # box = box[1:-1].split(',')
-            # box = [float(b) for b in box]
             box = [int(b) for b in box]
 
             x1, y1, width, height = box
@@ -63,8 +50,6 @@ def heatmap(bbox, label):#, config=new_config):
 
     def get_heatmap(p_x, p_y,label):
         # Ref: https://www.kaggle.com/diegojohnson/centernet-objects-as-points
-        # X1 = np.linspace(1, 1024, 1024)
-        # Y1 = np.linspace(1, 1024, 1024)
         X1 = np.linspace(1, config.in_size, config.in_size)
         Y1 = np.linspace(1, config.in_size, config.in_size)
         [X, Y] = np.meshgrid(X1, Y1)
@@ -98,7 +83,7 @@ def heatmap(bbox, label):#, config=new_config):
         w = np.array([10])
         h = np.array([10])
 
-    hm = np.zeros((config.in_size,config.in_size,config.num_classes)) #CHANGE THE FOLLOWING DIMENSIONS TO MATCH BOUNDING BOX FORMAT (1024 for this dataset, different for another)
+    hm = np.zeros((config.in_size,config.in_size,config.num_classes))
     width = np.zeros((config.in_size,config.in_size,1))
     height = np.zeros((config.in_size,config.in_size,1))
     for i in range(len(u)):
@@ -120,7 +105,7 @@ def heatmap(bbox, label):#, config=new_config):
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, df, mode='fit', batch_size=4, dim=(128, 128), n_channels=3,
-                 n_classes=3, shuffle=True):#, config=new_config):
+                 n_classes=3, shuffle=True):
         self.dim = dim
         self.batch_size = batch_size
         self.df = df
@@ -130,7 +115,6 @@ class DataGenerator(keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.random_state = config.seed
-        # self.config = config
 
         self.on_epoch_end()
 
@@ -201,33 +185,20 @@ class DataGenerator(keras.utils.Sequence):
     def __generate_y(self, items, shapes):
         y1 = []#width, height
         y2 = []#class and x,y
-        bboxes = []
-        classes = []
+
         for i, item in enumerate(items):
             _, top, left, width, height, label = item
             shape = shapes[i]
 
-            # top_resized = max(top * self.config.in_size // shape[0], 0)
-            # left_resized = max(left * self.config.in_size // shape[1], 0)
-            # height_resized = max(height * self.config.in_size // shape[0], 0)
-            # width_resized = max(width * self.config.in_size // shape[1], 0)
             top_resized = max(top * config.in_size // shape[0], 0)
             left_resized = max(left * config.in_size // shape[1], 0)
             height_resized = max(height * config.in_size // shape[0], 0)
             width_resized = max(width * config.in_size // shape[1], 0)
 
             bbox = [[left_resized, top_resized, width_resized, height_resized]]
-            mask, width, height = heatmap(bbox, label)#, config=self.config)
+            mask, width, height = heatmap(bbox, label)
             y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
             y2.append(mask)
-            # cls = label
-            #
-            # bboxes.append(bbox)
-            # classes.append(cls)
-
-            # mask, width, height = heatmap(bbox)
-            # y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position, width, height
-            # y2.append(mask)
 
         y1 = np.array(y1)
         y2 = np.array(y2)
@@ -376,17 +347,13 @@ def calculate_image_precision(preds_sorted, gt_boxes, thresholds=(0.5), form='co
     return image_precision
 
 def process_img(img, mode='training'):
-    # img = cv2.resize(img, (new_config.in_size, new_config.in_size))
     img = cv2.resize(img, (config.in_size, config.in_size))
     if mode == 'training':
         img = normalize_image(img)
 
     return img
 
-def show_result(test_img, sample_id, preds, gt_boxes):#, config=new_config):
-    # sample = cv2.cvtColor(cv2.imread(test_img_name), cv2.COLOR_BGR2RGB)
-    # sample = cv2.resize(sample, (config.in_size, config.in_size))
-    # sample = process_img(sample, mode='show')
+def show_result(test_img, sample_id, preds, gt_boxes):
     fig, ax = plt.subplots(1, 1, figsize=(16, 8))
     shape = test_img.shape
 
