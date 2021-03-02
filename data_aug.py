@@ -47,7 +47,7 @@ class Sequence(object):
                 prob = self.probs
 
             if random.random() < prob:
-                images, bboxes = augmentation(images, bboxes)
+                images, bboxes = augmentation(images, bboxes)#plt.imshow(draw_rect(images, bboxes)); plt.show()
         return images, bboxes
 
 class RandomHorizontalFlip(object):
@@ -77,7 +77,7 @@ class RandomHorizontalFlip(object):
         img_center = np.array(img.shape[:2])[::-1]/2
         img_center = np.hstack((img_center, img_center))
 
-        if self.dim2coord():
+        if self.dim2coord:
             bboxes = dim2coord(bboxes)
 
         if random.random() < self.p:
@@ -89,7 +89,7 @@ class RandomHorizontalFlip(object):
             bboxes[:,0] -= box_w
             bboxes[:,2] += box_w
 
-        if self.dim2coord():
+        if self.dim2coord:
             bboxes = coord2dim(bboxes)
 
         return img, bboxes
@@ -140,7 +140,7 @@ class RandomScale(object):
     def __call__(self, img, bboxes):
         #Choose a random digit to scale by
         img_shape = img.shape
-        if self.dim2coord():
+        if self.dim2coord:
             bboxes = dim2coord(bboxes)
         if self.diff:# Find new random scale factor
             scale_x = random.uniform(*self.scale)
@@ -155,6 +155,7 @@ class RandomScale(object):
         img = cv2.resize(img, None, fx = resize_scale_x, fy = resize_scale_y)#Resize to new dimensions
         bboxes[:,:4] *= [resize_scale_x, resize_scale_y, resize_scale_x, resize_scale_y]#Resize bbox
 
+        # canvas = np.zeros(img_shape, dtype = np.float64)#Black image
         canvas = np.zeros(img_shape, dtype = np.uint8)#Black image
 
         y_lim = int(min(resize_scale_y,1)*img_shape[0])
@@ -164,7 +165,7 @@ class RandomScale(object):
         img = canvas
         bboxes = clip_box(bboxes, [0,0,1 + img_shape[1], img_shape[0]], 0.25)#If bbox is now outside the image, clip it
 
-        if self.dim2coord():
+        if self.dim2coord:
             bboxes = coord2dim(bboxes)
 
         return img, bboxes
@@ -436,21 +437,23 @@ class Resize(object):
         img = letterbox_image(img, self.inp_dim)
 
 
-        scale = min(self.inp_dim/h, self.inp_dim/w)
+        scale = min(self.inp_dim[0]/h, self.inp_dim[1]/w)
         bboxes[:,:4] *= (scale)
 
         new_w = scale*w
         new_h = scale*h
         inp_dim = self.inp_dim
 
-        del_h = (inp_dim - new_h)/2
-        del_w = (inp_dim - new_w)/2
+        del_h = (inp_dim[0] - new_h)/2
+        del_w = (inp_dim[1] - new_w)/2
 
         add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)
 
         bboxes[:,:4] += add_matrix
 
+        # img = img.astype(np.float64)
         img = img.astype(np.uint8)
+
 
         if self.dim2coord:
             bboxes = coord2dim(bboxes)

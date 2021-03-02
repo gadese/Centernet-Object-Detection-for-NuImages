@@ -1,7 +1,7 @@
 class config:
-    epochs = 3
-    batch_size = 32
-    num_classes = 1
+    epochs = 1
+    batch_size = 4
+    num_classes = 6
     IMAGE_PATH = 'train/'
     lr = 5e-5 #1e-4
     seed = 42

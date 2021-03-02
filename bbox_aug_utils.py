@@ -1,13 +1,13 @@
 import cv2
 import numpy as np
 
-def dim2coord(self, bboxes):
+def dim2coord(bboxes):
     boxes = []
     for bbox in bboxes:
         boxes.append([bbox[0], bbox[1], bbox[0] + bbox[2], bbox[1] + bbox[3]])
     return np.array(boxes)
 
-def coord2dim(self, bboxes):
+def coord2dim(bboxes):
     boxes = []
     for bbox in bboxes:
         boxes.append([bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]])
@@ -260,7 +260,7 @@ def letterbox_image(img, inp_dim):
 
     '''
 
-    inp_dim = (inp_dim, inp_dim)
+    # inp_dim = (inp_dim, inp_dim)
     img_w, img_h = img.shape[1], img.shape[0]
     w, h = inp_dim
     new_w = int(img_w * min(w/img_w, h/img_h))
@@ -273,3 +273,41 @@ def letterbox_image(img, inp_dim):
 
     return canvas
 
+def draw_rect(im, cords, color = None, dim2coord_=True):
+    """Draw the rectangle on the image
+
+    Parameters
+    ----------
+
+    im : numpy.ndarray
+        numpy image
+
+    cords: numpy.ndarray
+        Numpy array containing bounding boxes of shape `N X 4` where N is the
+        number of bounding boxes and the bounding boxes are represented in the
+        format `x1 y1 x2 y2`
+
+    Returns
+    -------
+
+    numpy.ndarray
+        numpy image with bounding boxes drawn on it
+
+    """
+
+    im = im.copy()
+    if dim2coord_:
+        cords = dim2coord(cords)
+
+    cords = cords.reshape(-1,4)
+    if not color:
+        color = [255,255,255]
+    for cord in cords:
+
+        pt1, pt2 = (cord[0], cord[1]) , (cord[2], cord[3])
+
+        pt1 = int(pt1[0]), int(pt1[1])
+        pt2 = int(pt2[0]), int(pt2[1])
+
+        im = cv2.rectangle(im.copy(), pt1, pt2, color, int(max(im.shape[:2])/200))
+    return im

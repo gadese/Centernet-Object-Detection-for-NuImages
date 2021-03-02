@@ -37,7 +37,7 @@ These are the cases that need to be worked on in the next steps. In the first on
 ![Edge case 1](./images/Figure_4_sideways.png)
 
 ![Edge case 2](./images/Figure_5_multiple.png)
-
+AMvcGhT7VVjujz
 ### TO DO
 1. Add label classification
 2. Data is currently very limited, so I plan on adding simple data augmentation
@@ -48,3 +48,4 @@ These are the cases that need to be worked on in the next steps. In the first on
 1. https://github.com/see--/keras-centernet
 2. https://www.kaggle.com/c/mapmyindia2/data
 3. https://www.kaggle.com/greatgamedota/centernet-baseline-keras-training
+4. https://blog.paperspace.com/data-augmentation-for-bounding-boxes/

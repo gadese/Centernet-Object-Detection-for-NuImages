@@ -8,7 +8,7 @@ from collections import namedtuple
 from typing import List, Union
 
 from trainingconfig import config
-
+from data_aug import *
 
 # # Utils
 def normalize_image(image):
@@ -60,9 +60,9 @@ def heatmap(bbox, label):
         E2 = 2.0 * sigma_ ** 2
         Exponent = D2 / E2
         heatmap = np.exp(-Exponent)
-        hm = heatmap[:, :, np.newaxis]
-        # hm = np.zeros((config.in_size, config.in_size, config.num_classes))
-        # hm[:,:,label] = heatmap
+        # hm = heatmap[:, :, np.newaxis]
+        hm = np.zeros((config.in_size, config.in_size, config.num_classes))
+        hm[:,:,label] = heatmap
         return hm
 
     coors = []
@@ -96,9 +96,12 @@ def heatmap(bbox, label):
         heatmap = get_heatmap(u[i], v[i], label)
         hm[:,:] = np.maximum(hm[:,:,:],heatmap[:,:,:])
 
-    hm = cv2.resize(hm, (config.out_size,config.out_size))[:,:,None]
+    hm = cv2.resize(hm, (config.out_size,config.out_size))#[:,:,None]
+    hm = hm / np.max(hm)
     width = cv2.resize(width, (config.out_size,config.out_size))[:,:,None]
+    # width[width > 0] = np.max(width)
     height = cv2.resize(height, (config.out_size,config.out_size))[:,:,None]
+    # height[height > 0] = np.max(height)
     return hm, width, height
 
 # # Dataset
@@ -128,16 +131,35 @@ class DataGenerator(keras.utils.Sequence):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
 
         # Find list of IDs
-        items = [self.df.iloc[[k]].values[0] for k in indexes]
+        items = [self.df.iloc[[k]].values[0] for k in indexes]#items = [imgName, top, left, width, height, label]
 
-        X, shapes = self.__generate_X(items)
+        imgNames = []
+        boxes = []
+        labels = []
+        for item in items:
+            imgNames.append(item[0])
+            boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
+            labels.append(item[5])
+
+        Xs = self.__generate_X(imgNames)
+
+        transforms = Sequence([RandomHorizontalFlip(0.2, dim2coord=True),
+                               RandomScale(0.2, diff=True, dim2coord=True),
+                               RandomRotate(10, dim2coord=True),
+                               Resize((config.in_size, config.in_size), dim2coord=True)])
+
+        X, bboxes = [], []
+        for im, box in zip(Xs, boxes):
+            im_, box_ = transforms(im, [box])
+            X.append(im_)
+            bboxes.append(box_)
 
         if self.mode == 'fit':
-            y = self.__generate_y(items, shapes)
-            return X, y
+            y = self.__generate_y(bboxes, labels)
+            return np.array(X), y
 
         elif self.mode == 'predict':
-            return X
+            return np.array(X)
 
         else:
             raise AttributeError('The mode parameter should be set to "fit" or "predict".')
@@ -166,39 +188,41 @@ class DataGenerator(keras.utils.Sequence):
         return X, X_orig
 
 
-    def __generate_X(self, items):
+    def __generate_X(self, imgNames):
         'Generates data containing batch_size samples'
         X = []
-        shapes = []
 
-        for i, item in enumerate(items):
-            im_name = item[0]
+        for im_name in imgNames:
             img_path = f"{self.base_path}{im_name}"
-            img, shape = self.__load_rgb(img_path)
+            img = self.__load_rgb(img_path)
 
             X.append(img)
-            shapes.append(shape)
 
-        X = np.array(X)
-        return X, shapes
+        # X = np.array(X)
+        return np.array(X)
 
-    def __generate_y(self, items, shapes):
+    def __generate_y(self, bboxes, labels):
         y1 = []#width, height
         y2 = []#class and x,y
 
-        for i, item in enumerate(items):
-            _, top, left, width, height, label = item
-            shape = shapes[i]
+        for bbox, label in zip(bboxes, labels):
+            # left, top, width, height = bbox
+            # shape = shapes[i]
 
-            top_resized = max(top * config.in_size // shape[0], 0)
-            left_resized = max(left * config.in_size // shape[1], 0)
-            height_resized = max(height * config.in_size // shape[0], 0)
-            width_resized = max(width * config.in_size // shape[1], 0)
-
-            bbox = [[left_resized, top_resized, width_resized, height_resized]]
+            # bbox = [[left, top, width, height]]
             mask, width, height = heatmap(bbox, label)
             y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
             y2.append(mask)
+
+            # top_resized = max(top * config.in_size // shape[0], 0)
+            # left_resized = max(left * config.in_size // shape[1], 0)
+            # height_resized = max(height * config.in_size // shape[0], 0)
+            # width_resized = max(width * config.in_size // shape[1], 0)
+            #
+            # bbox = [[left_resized, top_resized, width_resized, height_resized]]
+            # mask, width, height = heatmap(bbox, label)
+            # y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
+            # y2.append(mask)
 
         y1 = np.array(y1)
         y2 = np.array(y2)
@@ -206,19 +230,16 @@ class DataGenerator(keras.utils.Sequence):
 
     def __load_grayscale(self, img_path):
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        img = cv2.resize(img, self.dim)
+        # img = cv2.resize(img, self.dim)
         img = img.astype(np.float32) / 255.
         img = np.expand_dims(img, axis=-1)
         return img
 
     def __load_rgb(self, img_path, pair=False):
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-        img_orig = img
-        img = cv2.resize(img, self.dim)
-        img = normalize_image(img)
-        if pair:
-            return img, img_orig
-        return img, img_orig.shape
+        # img = normalize_image(img)
+
+        return img
 
 # # IOU/Precision Utils
 # Ref: https://www.kaggle.com/pestipeti/competition-metric-details-script
@@ -353,11 +374,11 @@ def process_img(img, mode='training'):
 
     return img
 
-def show_result(test_img, sample_id, preds, gt_boxes):
+def show_result(test_img, sample_id, preds, gt_boxes, labels):
     fig, ax = plt.subplots(1, 1, figsize=(16, 8))
     shape = test_img.shape
 
-    for pred_box in preds:
+    for idx, pred_box in enumerate(preds):
         y1 = pred_box[1]*shape[0]//config.in_size
         x1 = pred_box[0]*shape[1]//config.in_size
         y2 = (pred_box[1] + pred_box[3])*shape[0]//config.in_size
@@ -368,6 +389,7 @@ def show_result(test_img, sample_id, preds, gt_boxes):
             (x2, y2),
             (220, 0, 0), 2
         )
+        cv2.putText(test_img, str(labels[idx]), (x1, y1), cv2.FONT_HERSHEY_PLAIN, 1, (220, 0, 0), 2)
 
     if gt_boxes is not None:
         for gt_box in gt_boxes:

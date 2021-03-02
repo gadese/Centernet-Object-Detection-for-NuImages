@@ -173,7 +173,8 @@ def _nms(heat, kernel=3):
     return heat * keep
 
 def decode_ddd(regr, hm_, k, output_stride):
-    hm = K.sigmoid(K.expand_dims(hm_[:,:,:,0])) #Might need to change this line to softmax when more classes
+    # hm = K.sigmoid(K.expand_dims(hm_[:,:,:,0])) #Might need to change this line to softmax when more classes
+    hm = K.sigmoid(hm_)
     hm = _nms(hm)
     hm_shape = K.shape(hm)
     regr_shape = K.shape(regr)

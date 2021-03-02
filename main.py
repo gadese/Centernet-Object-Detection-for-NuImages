@@ -5,6 +5,7 @@ import os
 from sklearn.model_selection import train_test_split
 import sklearn
 import random
+import matplotlib.pyplot as plt
 
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
@@ -40,6 +41,8 @@ nbr_labels = label_enc.classes_.size
 df['Label'] = labels
 
 train_df, val_df = train_test_split(df, random_state=config.seed, test_size=0.15)
+train_df = train_df[0:10]
+val_df = val_df[0:5]
 
 """
 Visualize sample from data
@@ -80,7 +83,7 @@ train_gen = DataGenerator(
     df=train_df,
     batch_size=config.batch_size,
     dim=(config.in_size,config.in_size),
-    n_classes=nbr_labels,
+    n_classes=config.num_classes,#n_classes=nbr_labels,
     shuffle=True
 )
 
@@ -88,9 +91,12 @@ val_gen = DataGenerator(
     df=val_df,
     batch_size=config.batch_size,
     dim=(config.in_size,config.in_size),
-    n_classes=nbr_labels,
+    n_classes=config.num_classes,#n_classes=nbr_labels,
     shuffle=True
 )
+# xtest, ytest = train_gen.__getitem__(1)
+# regr = regress_loss(ytest, ytest)
+# conf = conf_loss(ytest, ytest)
 
 kwargs = {
     'num_stacks': 2,
@@ -108,7 +114,7 @@ model.compile(optimizer=opt, loss=[regress_loss, conf_loss], loss_weights=[5, 1]
 
 # # Training
 checkpoint1 = ModelCheckpoint(#save current best
-    'hourglass1-test.h5',
+    'hourglass1-label.h5',
     monitor='loss',
     verbose=0,
     save_best_only=True,
@@ -117,7 +123,7 @@ checkpoint1 = ModelCheckpoint(#save current best
 )
 
 checkpoint2 = ModelCheckpoint(#save latest
-    'hourglass1-test-2.h5',
+    'hourglass1-label-2.h5',
     monitor='loss',
     verbose=0,
     save_best_only=False,
@@ -137,43 +143,43 @@ reducelr = ReduceLROnPlateau(
 Train model and visualize losses
 """
 
-# history = model.fit_generator(
-#     train_gen,
-#     validation_data=val_gen,
-#     epochs=config.epochs,
-#     callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
-#     use_multiprocessing=False,
-#     workers=4
-# )
-#
-# plt.plot(history.history['regr.1.1_loss'])
-# plt.plot(history.history['val_regr.1.1_loss'])
-# plt.title('regr loss')
-# plt.ylabel('loss')
-# plt.xlabel('epoch')
-# plt.legend(['train', 'val'], loc='upper left')
-# plt.show()
-#
-# plt.plot(history.history['confidence.1.1_loss'])
-# plt.plot(history.history['val_confidence.1.1_loss'])
-# plt.title('confidence loss')
-# plt.ylabel('loss')
-# plt.xlabel('epoch')
-# plt.legend(['train', 'val'], loc='upper left')
-# plt.show()
+history = model.fit_generator(
+    train_gen,
+    validation_data=val_gen,
+    epochs=config.epochs,
+    callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
+    use_multiprocessing=True,
+)
 
+plt.plot(history.history['regr.1.1_loss'])
+plt.plot(history.history['val_regr.1.1_loss'])
+plt.title('regr loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
 
-model.load_weights("trained_model/hourglass1-test2.h5")
+plt.plot(history.history['confidence.1.1_loss'])
+plt.plot(history.history['val_confidence.1.1_loss'])
+plt.title('confidence loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.legend(['train', 'val'], loc='upper left')
+plt.show()
+
+# model.load_weights("trained_model/hourglass1-test2.h5")
+# model.load_weights("hourglass1-label.h5")
+
 
 """
 Evaluate model and visualize output heatmaps for a sample
 """
-# results = model.evaluate(val_gen, use_multiprocessing=False, workers=4)
-# print("Val loss:", results)
+results = model.evaluate(val_gen, use_multiprocessing=False, workers=4)
+print("Val loss:", results)
 
 # X_test, y_test = val_gen.__getitem__(1)
 # regr, hm = model.predict(X_test)
-
+#
 # plt.imshow(tf.sigmoid(hm[0][:,:,0]))
 # plt.show()
 # plt.imshow(regr[0][:,:,0])
@@ -185,23 +191,26 @@ Evaluate model and visualize output heatmaps for a sample
 View bboxes prediction on sample images
 """
 decoded_model = add_decoder(model)
-
-img_test, img_test_orig = val_gen.get_pair_to_vizualise(1)
-decoded_pred = decoded_model.predict(img_test)
-
-for i in range(decoded_pred.shape[0]):
-    pred_box,scores=[],[]
-    for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
-        if detection[2] > 0.25:
-            x, y, score, _, width, height = detection
-            pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
-            scores.append(score)
-
-    pred_box = np.array(pred_box, dtype=np.int32)
-    scores = np.array(scores)
-
-    preds_sorted_idx = np.argsort(scores)[::-1]
-    preds_sorted = pred_box[preds_sorted_idx]
-
-    show_result(img_test_orig[i], 1, preds_sorted, None)
-
+#
+# img_test, img_test_orig = val_gen.get_pair_to_vizualise(1)
+# decoded_pred = decoded_model.predict(img_test)
+#
+# for i in range(decoded_pred.shape[0]):
+#     pred_box,scores,labels=[],[],[]
+#     for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
+#         if detection[2] > 0.25:
+#             x, y, score, label, width, height = detection
+#             pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
+#             scores.append(score)
+#             labels.append(label)
+#
+#     pred_box = np.array(pred_box, dtype=np.int32)
+#     scores = np.array(scores)
+#     labels = np.array(labels)
+#
+#     preds_sorted_idx = np.argsort(scores)[::-1]
+#     preds_sorted = pred_box[preds_sorted_idx]
+#     labels_sorted = labels[preds_sorted_idx]
+#
+#     show_result(img_test_orig[i], 1, preds_sorted, None, labels_sorted)
+#
