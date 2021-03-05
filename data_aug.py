@@ -210,7 +210,7 @@ class RandomTranslate(object):
             assert self.translate[1] > 0 & self.translate[1] < 1
 
         else:
-            assert self.translate > 0 & self.translate < 1
+            assert (self.translate > 0) & (self.translate < 1)
             self.translate = (-self.translate, self.translate)
 
         self.diff = diff
@@ -229,7 +229,7 @@ class RandomTranslate(object):
         if not self.diff:
             translate_factor_y = translate_factor_x
 
-        canvas = np.zeros(img_shape)
+        canvas = np.zeros(img_shape, dtype=np.uint8)
 
         #get the top-left corner co-ordinates of the shifted image
         corner_x = int(translate_factor_x*img.shape[1])
@@ -244,7 +244,7 @@ class RandomTranslate(object):
 
         #Shift bboxes and clip those outside the image
         bboxes[:,:4] += [corner_x, corner_y, corner_x, corner_y]
-        bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.25)
+        bboxes = clip_box(bboxes, [0,0,img_shape[1], img_shape[0]], 0.1)#Make sure we always return a bounding box or it can crash
 
         if self.dim2coord:
             bboxes = coord2dim(bboxes)
@@ -362,9 +362,9 @@ class RandomShear(object):
         if type(self.shear_factor) == tuple:
             assert len(self.shear_factor) == 2, "Invalid range for scaling factor"
         else:
-            self.shear_factor = (-self.shear_factor, self.shear_factor)
-        shear_factor[0] = 0
-        shear_factor = random.uniform(*self.shear_factor)
+            self.shear_factor = (0, self.shear_factor)
+        # self.shear_factor[0] = 0
+        # self.shear_factor = random.uniform(*self.shear_factor)
 
     def __call__(self, img, bboxes):
         if self.dim2coord:
@@ -452,10 +452,82 @@ class Resize(object):
         bboxes[:,:4] += add_matrix
 
         # img = img.astype(np.float64)
-        img = img.astype(np.uint8)
+        # img = img.astype(np.uint8)
 
 
         if self.dim2coord:
             bboxes = coord2dim(bboxes)
 
         return img, bboxes
+
+# https://stepup.ai/custom_data_augmentation_keras/
+class RandomColorShift(object):
+    """Randomly shifts the color of an image
+
+    Bounding boxes and image dimensions are maintained, we only slightly change pixel values
+
+    Parameters
+    ----------
+    range: float
+        The percentage interval by which we shift the values from the original ones. E.g. range=0.2 would output values between [0.8, 1.2]* the original value
+
+    Returns
+    -------
+
+    numpy.ndaaray
+        Scaled image in the numpy format of shape `HxWxC`
+
+    numpy.ndarray
+        The unchanged bounding box
+    """
+
+    def __init__(self, range = 0.2):
+        self.range = range
+
+        assert self.range > 0, "Please input a positive float"
+
+    def __call__(self, img, bboxes):
+
+        img = img.astype(np.uint16)
+        ranges = (1-self.range, 1+self.range)
+        for channel in range(img.shape[-1]):
+            scale = np.random.uniform(ranges[0], ranges[1])
+            img[:,:, channel] = img[:,:, channel] * scale
+        img = np.clip(img, 0, 255)
+
+        return img, bboxes
+
+def normalize_image(image):
+    """Normalize the image for the Hourglass network.
+    # Arguments
+      image: BGR uint8
+    # Returns
+      float32 image with the same shape as the input
+    """
+    mean = [0.40789655, 0.44719303, 0.47026116]
+    std = [0.2886383, 0.27408165, 0.27809834]
+    return ((np.float32(image) / 255.) - mean) / std
+
+class Normalize(object):
+    """Normalizes the image according to pre-training data
+
+    Bounding boxes and image dimensions are maintained, only pixel values are changes
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+
+    numpy.ndaaray
+        Scaled image in the numpy format of shape `HxWxC`
+
+    numpy.ndarray
+        The unchanged bounding box
+    """
+
+    def __init__(self):
+        pass
+
+    def __call__(self, img, bboxes):
+        return normalize_image(img), bboxes

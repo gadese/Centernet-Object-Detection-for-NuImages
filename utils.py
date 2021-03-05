@@ -108,7 +108,7 @@ def heatmap(bbox, label):
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, df, mode='fit', batch_size=4, dim=(128, 128), n_channels=3,
-                 n_classes=3, shuffle=True):
+                 n_classes=3, shuffle=True):#, nbr_batches=10):
         self.dim = dim
         self.batch_size = batch_size
         self.df = df
@@ -118,18 +118,20 @@ class DataGenerator(keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.random_state = config.seed
+        # self.nbr_batches = nbr_batches
 
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
         return int(np.floor(self.df.shape[0] / self.batch_size))
+        # return int(np.floor(self.nbr_batches * self.batch_size))
+
 
     def __getitem__(self, index):
         'Generate one batch of data'
         # Generate indexes of the batch
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-
         # Find list of IDs
         items = [self.df.iloc[[k]].values[0] for k in indexes]#items = [imgName, top, left, width, height, label]
 
@@ -143,10 +145,7 @@ class DataGenerator(keras.utils.Sequence):
 
         Xs = self.__generate_X(imgNames)
 
-        transforms = Sequence([RandomHorizontalFlip(0.2, dim2coord=True),
-                               RandomScale(0.2, diff=True, dim2coord=True),
-                               RandomRotate(10, dim2coord=True),
-                               Resize((config.in_size, config.in_size), dim2coord=True)])
+        transforms = Sequence(self.random_aug(1.0))
 
         X, bboxes = [], []
         for im, box in zip(Xs, boxes):
@@ -175,17 +174,24 @@ class DataGenerator(keras.utils.Sequence):
         'Generate one batch of data'
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         items = [self.df.iloc[[k]].values[0] for k in indexes]
-        X, X_orig = [], []
-        for i, item in enumerate(items):
-            im_name = item[0]
-            img_path = f"{self.base_path}{im_name}"
-            img, img_orig = self.__load_rgb(img_path, pair=True)
+        imgNames = []
+        boxes = []
+        labels = []
+        for item in items:
+            imgNames.append(item[0])
+            boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
+            labels.append(item[5])
+        Xs = self.__generate_X(imgNames)
 
-            X.append(img)
-            X_orig.append(img_orig)
-        X = np.array(X)
-        X_orig = np.array(X_orig)
-        return X, X_orig
+        transforms = Sequence(self.random_aug(0))
+        X, bboxes = [], []
+
+        for im, box in zip(Xs, boxes):
+            im_, box_ = transforms(im, [box])
+            X.append(im_)
+            bboxes.append(box_)
+
+        return np.array(X), np.array(Xs), np.array(bboxes) #Image resized/normalized, Image original, bbox on resized
 
 
     def __generate_X(self, imgNames):
@@ -240,6 +246,24 @@ class DataGenerator(keras.utils.Sequence):
         # img = normalize_image(img)
 
         return img
+
+    def random_aug(self, prob=0.5):
+        augments = []
+        if random.random() < prob:
+            augments.append(RandomHorizontalFlip(0.2, dim2coord=True))
+        if random.random() < prob:
+            augments.append(RandomScale(0.1, diff=True, dim2coord=True))
+        if random.random() < prob:
+            augments.append(RandomTranslate(0.05, dim2coord=True))
+        if random.random() < prob:
+            augments.append(RandomRotate(10, dim2coord=True))
+        if random.random() < prob:
+            augments.append(RandomShear(0.05, dim2coord=True))
+        if random.random() < prob:
+            augments.append(RandomColorShift(0.2))
+        augments.append(Normalize()) #Move this before color shift?
+        augments.append(Resize((config.in_size, config.in_size), dim2coord=True))
+        return augments
 
 # # IOU/Precision Utils
 # Ref: https://www.kaggle.com/pestipeti/competition-metric-details-script

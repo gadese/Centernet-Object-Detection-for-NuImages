@@ -48,14 +48,16 @@ def clip_box(bbox, clip_box, alpha):
     y_min = np.maximum(bbox[:,1], clip_box[1]).reshape(-1,1)
     x_max = np.minimum(bbox[:,2], clip_box[2]).reshape(-1,1)
     y_max = np.minimum(bbox[:,3], clip_box[3]).reshape(-1,1)
+    x_max = np.maximum(x_max, 0).reshape(-1,1)
+    y_max = np.maximum(y_max, 0).reshape(-1,1)
 
     bbox = np.hstack((x_min, y_min, x_max, y_max, bbox[:,4:]))
 
-    delta_area = ((ar_ - bbox_area(bbox))/ar_)
-
-    mask = (delta_area < (1 - alpha)).astype(int)
-
-    bbox = bbox[mask == 1,:]
+    # delta_area = ((ar_ - bbox_area(bbox))/ar_)
+    #
+    # mask = (delta_area < (1 - alpha)).astype(int)
+    #
+    # bbox = bbox[mask == 1,:]
 
     return bbox
 
@@ -267,7 +269,7 @@ def letterbox_image(img, inp_dim):
     new_h = int(img_h * min(w/img_w, h/img_h))
     resized_image = cv2.resize(img, (new_w,new_h))
 
-    canvas = np.full((inp_dim[1], inp_dim[0], 3), 0)
+    canvas = np.full((inp_dim[1], inp_dim[0], 3), 0, dtype=np.float64)
 
     canvas[(h-new_h)//2:(h-new_h)//2 + new_h,(w-new_w)//2:(w-new_w)//2 + new_w,  :] = resized_image
 

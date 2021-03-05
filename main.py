@@ -42,7 +42,7 @@ df['Label'] = labels
 
 train_df, val_df = train_test_split(df, random_state=config.seed, test_size=0.15)
 train_df = train_df[0:10]
-val_df = val_df[0:5]
+val_df = val_df[0:10]
 
 """
 Visualize sample from data
@@ -143,31 +143,32 @@ reducelr = ReduceLROnPlateau(
 Train model and visualize losses
 """
 
-history = model.fit_generator(
-    train_gen,
-    validation_data=val_gen,
-    epochs=config.epochs,
-    callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
-    use_multiprocessing=True,
-)
-
-plt.plot(history.history['regr.1.1_loss'])
-plt.plot(history.history['val_regr.1.1_loss'])
-plt.title('regr loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-plt.show()
-
-plt.plot(history.history['confidence.1.1_loss'])
-plt.plot(history.history['val_confidence.1.1_loss'])
-plt.title('confidence loss')
-plt.ylabel('loss')
-plt.xlabel('epoch')
-plt.legend(['train', 'val'], loc='upper left')
-plt.show()
+# history = model.fit_generator(
+#     train_gen,
+#     validation_data=val_gen,
+#     epochs=config.epochs,
+#     callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
+#     use_multiprocessing=True,
+# )
+#
+# plt.plot(history.history['regr.1.1_loss'])
+# plt.plot(history.history['val_regr.1.1_loss'])
+# plt.title('regr loss')
+# plt.ylabel('loss')
+# plt.xlabel('epoch')
+# plt.legend(['train', 'val'], loc='upper left')
+# plt.show()
+#
+# plt.plot(history.history['confidence.1.1_loss'])
+# plt.plot(history.history['val_confidence.1.1_loss'])
+# plt.title('confidence loss')
+# plt.ylabel('loss')
+# plt.xlabel('epoch')
+# plt.legend(['train', 'val'], loc='upper left')
+# plt.show()
 
 # model.load_weights("trained_model/hourglass1-test2.h5")
+model.load_weights("trained_model/hourglass1-labels.h5")
 # model.load_weights("hourglass1-label.h5")
 
 
@@ -177,8 +178,8 @@ Evaluate model and visualize output heatmaps for a sample
 results = model.evaluate(val_gen, use_multiprocessing=False, workers=4)
 print("Val loss:", results)
 
-# X_test, y_test = val_gen.__getitem__(1)
-# regr, hm = model.predict(X_test)
+X_test, y_test = val_gen.__getitem__(1)
+regr, hm = model.predict(X_test)
 #
 # plt.imshow(tf.sigmoid(hm[0][:,:,0]))
 # plt.show()
@@ -192,25 +193,25 @@ View bboxes prediction on sample images
 """
 decoded_model = add_decoder(model)
 #
-# img_test, img_test_orig = val_gen.get_pair_to_vizualise(1)
-# decoded_pred = decoded_model.predict(img_test)
-#
-# for i in range(decoded_pred.shape[0]):
-#     pred_box,scores,labels=[],[],[]
-#     for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
-#         if detection[2] > 0.25:
-#             x, y, score, label, width, height = detection
-#             pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
-#             scores.append(score)
-#             labels.append(label)
-#
-#     pred_box = np.array(pred_box, dtype=np.int32)
-#     scores = np.array(scores)
-#     labels = np.array(labels)
-#
-#     preds_sorted_idx = np.argsort(scores)[::-1]
-#     preds_sorted = pred_box[preds_sorted_idx]
-#     labels_sorted = labels[preds_sorted_idx]
-#
-#     show_result(img_test_orig[i], 1, preds_sorted, None, labels_sorted)
+img_test, img_test_orig, boxes = val_gen.get_pair_to_vizualise(1)
+decoded_pred = decoded_model.predict(img_test)
+
+for i in range(decoded_pred.shape[0]):
+    pred_box,scores,labels=[],[],[]
+    for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
+        if detection[2] > 0.25:
+            x, y, score, label, width, height = detection
+            pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
+            scores.append(score)
+            labels.append(label)
+
+    pred_box = np.array(pred_box, dtype=np.int32)
+    scores = np.array(scores)
+    labels = np.array(labels)
+
+    preds_sorted_idx = np.argsort(scores)[::-1]
+    preds_sorted = pred_box[preds_sorted_idx]
+    labels_sorted = labels[preds_sorted_idx]
+
+    show_result(img_test_orig[i], 1, preds_sorted, None, labels_sorted)
 #
