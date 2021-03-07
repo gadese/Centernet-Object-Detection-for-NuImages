@@ -60,10 +60,10 @@ Currently, the following transforms are supported for data augmentation:
 During training, transforms are randomly applied to training image. However, the current implementation shouldn't be seen as generating "new" samples, but rather as "adding noise" to the dataset at every epoch. This should probably be changed.
 
 ### TO DO
--[x] Add label classification
--[x] Data is currently very limited, so I plan on adding data augmentation
--[ ] Adding MixUp data augmentation
--[ ] Trying adversarial training for increased robustness
+- [x] Add label classification
+- [x] Data is currently very limited, so I plan on adding data augmentation
+- [ ] Adding MixUp data augmentation
+- [ ] Trying adversarial training for increased robustness
 
 ### References
 1. https://github.com/see--/keras-centernet
