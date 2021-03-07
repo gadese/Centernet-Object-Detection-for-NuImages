@@ -241,6 +241,27 @@ def get_enclosing_box(corners):
 
     return final
 
+def inverse_resize_bbox(bboxes, orig_dim, inp_dim, dimToCoord=True):
+    if dimToCoord:
+        bboxes = dim2coord(bboxes)
+    w,h = orig_dim[1], orig_dim[0]
+    scale = min(inp_dim[0]/w, inp_dim[1]/h)
+
+    new_w = w * scale
+    new_h = h * scale
+
+    del_h = (inp_dim[0] - new_h)/2
+    del_w = (inp_dim[1] - new_w)/2
+
+    add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)
+
+    bboxes[:,:4] -= add_matrix
+
+    bboxes[:,:4] = bboxes[:,:4] / (scale)
+
+    if dimToCoord:
+        bboxes = coord2dim(bboxes)
+    return bboxes
 
 def letterbox_image(img, inp_dim):
     '''resize image with unchanged aspect ratio using padding

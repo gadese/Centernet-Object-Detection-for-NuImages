@@ -432,27 +432,27 @@ class Resize(object):
     def __call__(self, img, bboxes):
         if self.dim2coord:
             bboxes = dim2coord(bboxes)
-
+        img_ = img.copy()
         w,h = img.shape[1], img.shape[0]
         img = letterbox_image(img, self.inp_dim)
 
+        scale = min(self.inp_dim[0]/h, self.inp_dim[1]/w)#[1361 312 1405 350], scale=0.267
+        bboxes[:,:4] *= (scale)#[363 83 374 93]
 
-        scale = min(self.inp_dim[0]/h, self.inp_dim[1]/w)
-        bboxes[:,:4] *= (scale)
-
-        new_w = scale*w
-        new_h = scale*h
+        new_w = scale*w#512
+        new_h = scale*h#288
         inp_dim = self.inp_dim
 
-        del_h = (inp_dim[0] - new_h)/2
-        del_w = (inp_dim[1] - new_w)/2
+        del_h = (inp_dim[0] - new_h)/2#112
+        del_w = (inp_dim[1] - new_w)/2#0
 
-        add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)
+        add_matrix = np.array([[del_w, del_h, del_w, del_h]]).astype(int)# [0 112 0 112]
 
-        bboxes[:,:4] += add_matrix
+        bboxes[:,:4] += add_matrix #[363 195 374 205]
 
         # img = img.astype(np.float64)
         # img = img.astype(np.uint8)
+        # test = inverse_resize_bbox(bboxes, img_.shape, inp_dim, dimToCoord=False)
 
 
         if self.dim2coord:

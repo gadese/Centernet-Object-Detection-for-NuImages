@@ -108,7 +108,7 @@ def heatmap(bbox, label):
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
     def __init__(self, df, mode='fit', batch_size=4, dim=(128, 128), n_channels=3,
-                 n_classes=3, shuffle=True):#, nbr_batches=10):
+                 n_classes=3, shuffle=True, aug=1.0):#, nbr_batches=10):
         self.dim = dim
         self.batch_size = batch_size
         self.df = df
@@ -118,6 +118,7 @@ class DataGenerator(keras.utils.Sequence):
         self.n_classes = n_classes
         self.shuffle = shuffle
         self.random_state = config.seed
+        self.aug = aug
         # self.nbr_batches = nbr_batches
 
         self.on_epoch_end()
@@ -127,31 +128,8 @@ class DataGenerator(keras.utils.Sequence):
         return int(np.floor(self.df.shape[0] / self.batch_size))
         # return int(np.floor(self.nbr_batches * self.batch_size))
 
-
     def __getitem__(self, index):
-        'Generate one batch of data'
-        # Generate indexes of the batch
-        indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
-        # Find list of IDs
-        items = [self.df.iloc[[k]].values[0] for k in indexes]#items = [imgName, top, left, width, height, label]
-
-        imgNames = []
-        boxes = []
-        labels = []
-        for item in items:
-            imgNames.append(item[0])
-            boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
-            labels.append(item[5])
-
-        Xs = self.__generate_X(imgNames)
-
-        transforms = Sequence(self.random_aug(1.0))
-
-        X, bboxes = [], []
-        for im, box in zip(Xs, boxes):
-            im_, box_ = transforms(im, [box])
-            X.append(im_)
-            bboxes.append(box_)
+        X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
 
         if self.mode == 'fit':
             y = self.__generate_y(bboxes, labels)
@@ -160,8 +138,11 @@ class DataGenerator(keras.utils.Sequence):
         elif self.mode == 'predict':
             return np.array(X)
 
+        elif self.mode == 'visualize':
+            return np.array(X), np.array(X_orig), bboxes, labels
+
         else:
-            raise AttributeError('The mode parameter should be set to "fit" or "predict".')
+            raise AttributeError('The mode parameter should be set to "fit" or "predict" or "visualize".')
 
     def on_epoch_end(self):
         'Updates indexes after each epoch'
@@ -170,7 +151,7 @@ class DataGenerator(keras.utils.Sequence):
             np.random.seed(self.random_state)
             np.random.shuffle(self.indexes)
 
-    def get_pair_to_vizualise(self, index):
+    def get_img_box_pairs(self, index, aug=0):
         'Generate one batch of data'
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         items = [self.df.iloc[[k]].values[0] for k in indexes]
@@ -183,7 +164,7 @@ class DataGenerator(keras.utils.Sequence):
             labels.append(item[5])
         Xs = self.__generate_X(imgNames)
 
-        transforms = Sequence(self.random_aug(0))
+        transforms = Sequence(self.random_aug(aug))
         X, bboxes = [], []
 
         for im, box in zip(Xs, boxes):
@@ -191,7 +172,7 @@ class DataGenerator(keras.utils.Sequence):
             X.append(im_)
             bboxes.append(box_)
 
-        return np.array(X), np.array(Xs), np.array(bboxes) #Image resized/normalized, Image original, bbox on resized
+        return np.array(X), np.array(Xs), np.array(bboxes), labels #Image resized/normalized, Image original, bbox on resized
 
 
     def __generate_X(self, imgNames):
@@ -379,11 +360,7 @@ def calculate_image_precision(preds_sorted, gt_boxes, thresholds=(0.5), form='co
     image_precision = 0.0
 
     for threshold in thresholds:
-        precision_at_threshold, _, _ = calculate_precision(preds_sorted,
-                                                           gt_boxes,
-                                                           threshold=threshold,
-                                                           form=form
-                                                           )
+        precision_at_threshold, _, _ = calculate_precision(preds_sorted, gt_boxes, threshold=threshold, form=form)
         if debug:
             print("@{0:.2f} = {1:.4f}".format(threshold, precision_at_threshold))
 
@@ -403,28 +380,88 @@ def show_result(test_img, sample_id, preds, gt_boxes, labels):
     shape = test_img.shape
 
     for idx, pred_box in enumerate(preds):
-        y1 = pred_box[1]*shape[0]//config.in_size
-        x1 = pred_box[0]*shape[1]//config.in_size
-        y2 = (pred_box[1] + pred_box[3])*shape[0]//config.in_size
-        x2 = (pred_box[0] + pred_box[2])*shape[1]//config.in_size
+        fullsize_box = inverse_resize_bbox([pred_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
+        y1 = fullsize_box[1]
+        x1 = fullsize_box[0]
+        y2 = y1 + fullsize_box[3]
+        x2 = x1 + fullsize_box[2]
         cv2.rectangle(
             test_img,
             (x1, y1),
             (x2, y2),
             (220, 0, 0), 2
         )
-        cv2.putText(test_img, str(labels[idx]), (x1, y1), cv2.FONT_HERSHEY_PLAIN, 1, (220, 0, 0), 2)
+        cv2.putText(test_img, labels[idx], (x1, y1), cv2.FONT_HERSHEY_PLAIN, 2, (220, 0, 0), 2)
 
     if gt_boxes is not None:
         for gt_box in gt_boxes:
-            cv2.rectangle(
-                test_img,
-                (gt_box[0], gt_box[1]),
-                (gt_box[0] + gt_box[2], gt_box[1] + gt_box[3]),
-                (0, 0, 220), 2
-            )
+            fullsize_box = inverse_resize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
+            y1gt = int(np.floor(fullsize_box[1]))
+            x1gt = int(np.floor(fullsize_box[0]))
+            y2gt = y1gt + int(np.floor(fullsize_box[3]))
+            x2gt = x1gt + int(np.floor(fullsize_box[2]))
+            cv2.rectangle(test_img, (x1gt, y1gt), (x2gt, y2gt), (0, 0, 220), 2)
 
     ax.set_axis_off()
     ax.imshow(test_img)
     ax.set_title("RED: Predicted | BLUE - Ground-truth(if available)")
     plt.show()
+
+def calcmAP(decoded_model, threshold=0.3, datagen = None):
+  # model_ = add_decoder(model)
+
+  iou_thresholds = [x for x in np.arange(0.5, 0.76, 0.05)]
+
+  precision = []
+
+  for idx in range(len(datagen)):
+      img_test, img_test_orig, boxes, _ = datagen.get_img_box_pairs(idx)
+      decoded_pred = decoded_model.predict(img_test)
+
+      for i in range(decoded_pred.shape[0]):
+          pred_box,scores=[],[]
+          for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
+              if detection[2] > threshold:
+                  x, y, score, _, width, height = detection
+                  pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
+                  scores.append(score)
+
+          pred_box = np.array(pred_box, dtype=np.int32)
+          scores = np.array(scores)
+
+          preds_sorted_idx = np.argsort(scores)[::-1]
+          preds_sorted = pred_box[preds_sorted_idx]
+
+          if len(boxes) > 0:
+              image_precision = calculate_image_precision(preds_sorted, boxes[i], thresholds=iou_thresholds, form='coco', debug=False)
+              precision.append(image_precision)
+          else:
+              if len(preds_sorted) > 0:
+                  precision.append(0)
+
+  precision = np.array(precision)
+  return np.mean(precision)
+
+import tensorflow as tf
+class SaveBestmAP(tf.keras.callbacks.Callback):
+  def __init__(self, path):
+    super(SaveBestmAP, self).__init__()
+    self.best_weights = None
+    self.path = path
+
+  def on_train_begin(self, logs=None):
+    self.best = 0
+
+  def on_epoch_end(self, epoch, logs=None):
+    current = calcmAP(self.model, 0.4)
+    if np.greater(current, self.best):
+      self.best = current
+      self.best_weights = self.model.get_weights()
+      print(f'Best mAP: {current}, saving...')
+      self.model.save_weights(self.path)
+    else:
+      print(f'Current mAP: {current}')
+
+  def on_train_end(self, logs=None):
+    print(f'Loading best model...')
+    self.model.load_weights(self.path)

@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau
 
 from model import HourglassNetwork, add_decoder
 from loss import *
-from utils import DataGenerator, show_result
+from utils import DataGenerator, show_result, calcmAP
 from trainingconfig import config
 
 """
@@ -168,15 +168,15 @@ Train model and visualize losses
 # plt.show()
 
 # model.load_weights("trained_model/hourglass1-test2.h5")
-model.load_weights("trained_model/hourglass1-labels.h5")
+model.load_weights("trained_model/hourglass1-labels2.h5")
 # model.load_weights("hourglass1-label.h5")
 
 
 """
 Evaluate model and visualize output heatmaps for a sample
 """
-results = model.evaluate(val_gen, use_multiprocessing=False, workers=4)
-print("Val loss:", results)
+# results = model.evaluate(val_gen, use_multiprocessing=False, workers=4)
+# print("Val loss:", results)
 
 X_test, y_test = val_gen.__getitem__(1)
 regr, hm = model.predict(X_test)
@@ -193,13 +193,13 @@ View bboxes prediction on sample images
 """
 decoded_model = add_decoder(model)
 #
-img_test, img_test_orig, boxes = val_gen.get_pair_to_vizualise(1)
+img_test, img_test_orig, boxes, _ = val_gen.get_img_box_pairs(1)
 decoded_pred = decoded_model.predict(img_test)
 
 for i in range(decoded_pred.shape[0]):
     pred_box,scores,labels=[],[],[]
     for detection in decoded_pred[i]: #[xs, ys, scores, classes, width, height]
-        if detection[2] > 0.25:
+        if detection[2] > 0.255:
             x, y, score, label, width, height = detection
             pred_box.append([max(x-(width/2.), 0), max(y-(height/2.), 0), width, height])
             scores.append(score)
@@ -212,6 +212,17 @@ for i in range(decoded_pred.shape[0]):
     preds_sorted_idx = np.argsort(scores)[::-1]
     preds_sorted = pred_box[preds_sorted_idx]
     labels_sorted = labels[preds_sorted_idx]
+    labels_decoded = label_enc.inverse_transform([int(label) for label in labels_sorted])
 
-    show_result(img_test_orig[i], 1, preds_sorted, None, labels_sorted)
+    show_result(img_test_orig[i], sample_id=i, preds=preds_sorted, gt_boxes=boxes[i], labels=labels_decoded)
+
+mAP_gen = DataGenerator(
+    df=val_df,
+    batch_size=config.batch_size,
+    dim=(config.in_size,config.in_size),
+    n_classes=config.num_classes,#n_classes=nbr_labels,
+    shuffle=True,
+    aug=0
+)
+mAP = calcmAP(decoded_model, threshold = 0.3, datagen=mAP_gen)
 #
