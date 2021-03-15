@@ -119,21 +119,28 @@ class DataGenerator(keras.utils.Sequence):
         self.shuffle = shuffle
         self.random_state = config.seed
         self.aug = aug
+        self.dflength = int(np.floor(self.df.shape[0] / self.batch_size))
         # self.nbr_batches = nbr_batches
 
         self.on_epoch_end()
 
     def __len__(self):
         'Denotes the number of batches per epoch'
-        return int(np.floor(self.df.shape[0] / self.batch_size))
+        return self.dflength
         # return int(np.floor(self.nbr_batches * self.batch_size))
 
     def __getitem__(self, index):
-        X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
+        # X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
+        X, X_orig, bboxes, labels = self.get_random_img_box_pairs(aug=self.aug)
 
         if self.mode == 'fit':
             y = self.__generate_y(bboxes, labels)
-            return np.array(X), y
+
+            alpha = 0.3
+            lambd = np.clip(np.random.beta(alpha, alpha), 0.3, 0.7)#Minimum 0.3, maximum 0.7
+            X_mix = X[0] * lambd + X[1] * (1-lambd)
+            y_mix = [target.sum(axis=0, keepdims=True) for target in y]
+            return np.expand_dims(X_mix,axis=0), y_mix
 
         elif self.mode == 'predict':
             return np.array(X)
@@ -174,6 +181,28 @@ class DataGenerator(keras.utils.Sequence):
 
         return np.array(X), np.array(Xs), np.array(bboxes), labels #Image resized/normalized, Image original, bbox on resized
 
+    def get_random_img_box_pairs(self, aug=0, nbr2get=2):
+            'Generate one batch of data'
+            idxs = np.random.randint(0, high=self.dflength, size=nbr2get)
+            items = [self.df.iloc[[idx]].values[0] for idx in idxs]
+            imgNames = []
+            boxes = []
+            labels = []
+            for item in items:
+                imgNames.append(item[0])
+                boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
+                labels.append(item[5])
+            Xs = self.__generate_X(imgNames)
+
+            transforms = Sequence(self.random_aug(aug))
+            X, bboxes = [], []
+
+            for im, box in zip(Xs, boxes):
+                im_, box_ = transforms(im, [box])
+                X.append(im_)
+                bboxes.append(box_)
+
+            return np.array(X), np.array(Xs), np.array(bboxes), np.array(labels) #Image resized/normalized, Image original, bbox on resized
 
     def __generate_X(self, imgNames):
         'Generates data containing batch_size samples'
