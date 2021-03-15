@@ -460,6 +460,43 @@ class Resize(object):
 
         return img, bboxes
 
+class SimpleResize(object):
+    """Resize the image without preserving aspect ratio
+
+    Parameters
+    ----------
+    inp_dim : tuple(int)
+        tuple containing the size to which the image will be resized.
+
+    Returns
+    -------
+
+    numpy.ndaaray
+        Sheared image in the numpy format of shape `HxWxC`
+
+    numpy.ndarray
+        Resized bounding box co-ordinates of the format `n x 4` where n is
+        number of bounding boxes and 4 represents `x1,y1,x2,y2` of the box
+
+    """
+
+    def __init__(self, inp_dim):
+        self.inp_dim = inp_dim
+
+    def __call__(self, img, bboxes):
+
+        w,h = img.shape[1], img.shape[0]#[719 243 17 16]
+        img = cv2.resize(img, self.inp_dim)
+
+        bboxes[:,0] = bboxes[:,0] * self.inp_dim[1] // w
+        bboxes[:,1] = bboxes[:,1] * self.inp_dim[0] // h
+        bboxes[:,2] = bboxes[:,2] * self.inp_dim[1] // w
+        bboxes[:,3] = bboxes[:,3] * self.inp_dim[0] // h
+
+        # test = inverse_simpleresize_bbox(bboxes, (h, w), (512, 512))
+
+        return img, bboxes
+
 # https://stepup.ai/custom_data_augmentation_keras/
 class RandomColorShift(object):
     """Randomly shifts the color of an image

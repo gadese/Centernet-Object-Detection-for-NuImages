@@ -143,13 +143,13 @@ reducelr = ReduceLROnPlateau(
 Train model and visualize losses
 """
 
-# history = model.fit_generator(
-#     train_gen,
-#     validation_data=val_gen,
-#     epochs=config.epochs,
-#     callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
-#     use_multiprocessing=True,
-# )
+history = model.fit_generator(
+    train_gen,
+    validation_data=val_gen,
+    epochs=config.epochs,
+    callbacks=[reducelr, checkpoint1, checkpoint2],#, savemAP],
+    use_multiprocessing=True,
+)
 #
 # plt.plot(history.history['regr.1.1_loss'])
 # plt.plot(history.history['val_regr.1.1_loss'])
@@ -167,8 +167,7 @@ Train model and visualize losses
 # plt.legend(['train', 'val'], loc='upper left')
 # plt.show()
 
-# model.load_weights("trained_model/hourglass1-test2.h5")
-model.load_weights("trained_model/hourglass1-labels2.h5")
+# model.load_weights("trained_model/hourglass1-labels2.h5")
 # model.load_weights("hourglass1-label.h5")
 
 

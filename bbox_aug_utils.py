@@ -263,6 +263,21 @@ def inverse_resize_bbox(bboxes, orig_dim, inp_dim, dimToCoord=True):
         bboxes = coord2dim(bboxes)
     return bboxes
 
+def inverse_simpleresize_bbox(bboxes, orig_dim, inp_dim, dimToCoord=False):
+    if dimToCoord:
+        bboxes = dim2coord(bboxes)
+
+    w,h = orig_dim[1], orig_dim[0]
+
+    bboxes[:,0] = bboxes[:,0] * w // inp_dim[1]
+    bboxes[:,1] = bboxes[:,1] * h // inp_dim[0]
+    bboxes[:,2] = bboxes[:,2] * w // inp_dim[1]
+    bboxes[:,3] = bboxes[:,3] * h // inp_dim[0]
+
+    if dimToCoord:
+        bboxes = coord2dim(bboxes)
+    return bboxes
+
 def letterbox_image(img, inp_dim):
     '''resize image with unchanged aspect ratio using padding
 

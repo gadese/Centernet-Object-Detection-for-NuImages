@@ -39,13 +39,13 @@ These are the cases that need to be worked on in the next steps. In the first on
 ![Edge case 2](./images/Figure_5_multiple.png)
 
 ## Label classification
-Label classification is currently functional. Objectness is generally good (the detector correctly sees the speed sign as an object of interest). However, performance is generally poor for the label classification and the detector outputs an almost equal probability for every speed limit. This is most likely due to the fact that the detector knows to find the signs in the image, but not to look at the written speed limit.
+Label classification is currently functional. Objectness is generally good (the detector correctly sees the speed sign as an object of interest). However, performance is generally poor for the label classification and the detector outputs an almost equal probability for every speed limit. This is most likely due to the fact that images fed to the detector are heavily downsized compared to their original dimensions (in many cases they go from 1920 pixels to 512). It is possible that the written speed limit information is partially lost during the downsampling, which makes classification harder.
 
 This could possibly be due to a lack of data, or even to the fact that the current data augmentation has a small chance of flipping the image, which would obviously result in a different speed being shown on the sign. There are a few possible things to try in order to improve this part:
 1. Rather than using heatmaps to classify the signs, we could try a classical classifier (softmax classifier for N classes, where N is the number of speed limits). This technique probably has the highest chance of success. However, the downside is that it wouldn't work if there are multiple signs in the image (this isn't a multilabel classification problem, as each object has its specific category).
 2. Try adding more data
 3. Modify loss function to give more weight to the label classification, or even a penalty for wrong classification. This would theoretically force the model to learn to differentiate between classes.
-4. Images are currently resized using letterbox transform for the input to the network. It is possible that the written speed limit information is partially lost during the downsampling, which makes classification harder. A "dumb" resizing (not keeping aspect ratio) could possibly help.
+4. Images are currently resized using letterbox transform for the input to the network. A "dumb" resizing (not keeping aspect ratio) could possibly help.
 
 ## Data augmentation
 Currently, the following transforms are supported for data augmentation:

@@ -241,9 +241,10 @@ class DataGenerator(keras.utils.Sequence):
         if random.random() < prob:
             augments.append(RandomShear(0.05, dim2coord=True))
         if random.random() < prob:
-            augments.append(RandomColorShift(0.2))
+            augments.append(RandomColorShift(0.1))
         augments.append(Normalize()) #Move this before color shift?
         augments.append(Resize((config.in_size, config.in_size), dim2coord=True))
+        # augments.append(SimpleResize((config.in_size, config.in_size)))
         return augments
 
 # # IOU/Precision Utils
@@ -381,6 +382,7 @@ def show_result(test_img, sample_id, preds, gt_boxes, labels):
 
     for idx, pred_box in enumerate(preds):
         fullsize_box = inverse_resize_bbox([pred_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
+        # fullsize_box = inverse_simpleresize_bbox([pred_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
         y1 = fullsize_box[1]
         x1 = fullsize_box[0]
         y2 = y1 + fullsize_box[3]
@@ -396,6 +398,7 @@ def show_result(test_img, sample_id, preds, gt_boxes, labels):
     if gt_boxes is not None:
         for gt_box in gt_boxes:
             fullsize_box = inverse_resize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
+            # fullsize_box = inverse_simpleresize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
             y1gt = int(np.floor(fullsize_box[1]))
             x1gt = int(np.floor(fullsize_box[0]))
             y2gt = y1gt + int(np.floor(fullsize_box[3]))
