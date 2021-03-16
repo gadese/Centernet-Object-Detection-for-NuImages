@@ -62,7 +62,8 @@ During training, transforms are randomly applied to training image. However, the
 ### TO DO
 - [x] Add label classification
 - [x] Data is currently very limited, so I plan on adding data augmentation
-- [ ] Adding MixUp data augmentation
+- [x] Adding MixUp data augmentation
+- [x] Adding support for multiple objects in an image(heatmap generation)
 - [ ] Trying adversarial training for increased robustness
 
 ### References

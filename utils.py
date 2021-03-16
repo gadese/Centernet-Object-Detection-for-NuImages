@@ -93,7 +93,8 @@ def heatmap(bbox, label):
                 height[int(v[i])+coor[0], int(u[i])+coor[1]] = h[i] / config.out_size
             except:
                 pass
-        heatmap = get_heatmap(u[i], v[i], label)
+        # heatmap = get_heatmap(u[i], v[i], label)
+        heatmap = get_heatmap(u[i], v[i], label[i])
         hm[:,:] = np.maximum(hm[:,:,:],heatmap[:,:,:])
 
     hm = cv2.resize(hm, (config.out_size,config.out_size))#[:,:,None]
@@ -130,17 +131,22 @@ class DataGenerator(keras.utils.Sequence):
         # return int(np.floor(self.nbr_batches * self.batch_size))
 
     def __getitem__(self, index):
-        # X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
-        X, X_orig, bboxes, labels = self.get_random_img_box_pairs(aug=self.aug)
+        X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
+        # X, X_orig, bboxes, labels = self.get_random_img_box_pairs(aug=self.aug)
 
         if self.mode == 'fit':
             y = self.__generate_y(bboxes, labels)
+            # y = self.__generate_y_multiboxes(bboxes_merged, labels_merged)
 
-            alpha = 0.3
-            lambd = np.clip(np.random.beta(alpha, alpha), 0.3, 0.7)#Minimum 0.3, maximum 0.7
-            X_mix = X[0] * lambd + X[1] * (1-lambd)
-            y_mix = [target.sum(axis=0, keepdims=True) for target in y]
-            return np.expand_dims(X_mix,axis=0), y_mix
+            return X, y
+        # if self.mode == 'fit':
+        #     y = self.__generate_y(bboxes, labels)
+        #
+        #     alpha = 0.3
+        #     lambd = np.clip(np.random.beta(alpha, alpha), 0.3, 0.7)#Minimum 0.3, maximum 0.7
+        #     X_mix = X[0] * lambd + X[1] * (1-lambd)
+        #     y_mix = [target.sum(axis=0, keepdims=True) for target in y]
+        #     return np.expand_dims(X_mix,axis=0), y_mix
 
         elif self.mode == 'predict':
             return np.array(X)
@@ -179,7 +185,7 @@ class DataGenerator(keras.utils.Sequence):
             X.append(im_)
             bboxes.append(box_)
 
-        return np.array(X), np.array(Xs), np.array(bboxes), labels #Image resized/normalized, Image original, bbox on resized
+        return np.array(X), np.array(Xs), np.array(bboxes), np.array(labels) #Image resized/normalized, Image original, bbox on resized
 
     def get_random_img_box_pairs(self, aug=0, nbr2get=2):
             'Generate one batch of data'
@@ -216,6 +222,25 @@ class DataGenerator(keras.utils.Sequence):
 
         # X = np.array(X)
         return np.array(X)
+
+    def __generate_y_multiboxes(self, all_bboxes, all_labels):
+            y1 = []#width, height
+            y2 = []#class and x,y
+
+            for bboxes, labels in zip(all_bboxes, all_labels):
+                mask, width, height = heatmap(bboxes, labels)
+            # for bboxes, labels in zip(all_bboxes, all_labels):
+            #     masks, widths, heights = [], [], []
+            #     for bbox, label in bboxes, labels:
+            #         mask, width, height = heatmap(bbox, label)
+            #         masks.append(mask), widths.append(width), heights.append(height)
+                # mask = []
+                y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
+                y2.append(mask)
+
+            y1 = np.array(y1)
+            y2 = np.array(y2)
+            return [y1,y2]
 
     def __generate_y(self, bboxes, labels):
         y1 = []#width, height
