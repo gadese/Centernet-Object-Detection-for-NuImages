@@ -1,51 +1,38 @@
-# Speed Signs detection
+# Autonomous car object detection
 
 ## Project Overview
-My goal with this project was to become familiar with the CenterNet architecture for Object Detection.
-It is still on-going, and I will be adding more features as time goes. 
+My goal with this project was to become familiar with the inner workings of the CenterNet architecture for Object Detection, without using a model Zoo.
 
-The problem is a typical object detection problem; I am using a small Kaggle dataset (https://www.kaggle.com/c/mapmyindia2/data) where speed limit signs are identified with a bounding box, as well as a label for the associated speed limit (e.g. a max speed 80 sign would have label '80').
-
-### Data format
-
-    Img_Name - name of processed image
-    Top - distance of label from top
-    Left - distance of label from left
-    Width - width of label
-    Height - height of the label
-    Label - label
+The problem is a typical object detection problem; I am using the NuImages dataset (https://www.nuscenes.org/nuimages), where typical self-driving car objects (cars, trucks, traffic signs, people, etc.) are identified with a bounding box, as well as a label.
 
 ## Baseline
-The code goes through the whole model training pipeline: loading the model, visualizing data, train/dev split, preprocessing, creating a data generator, training and evaluating. 
+The code goes through the whole model training pipeline: loading the data, visualizing data, train/dev split, preprocessing, creating a data generator, building the model with hourglass architecture, loading pre-trained weights, transfer learning (training) and evaluating. 
 
-The current version of the model is functional and able to localize the speed signs in images. Since I am building the model from the ground-up, it currently doesn't tell the difference between classes, although that is the next step.
+The current version of the model is functional and able to localize the most of the relevant objects in the image. 
 
 ### Baseline example prediction
-Here are some predictions obtained from the model. As we can see, the model is able to succesfully detect the speed signs. The IOU between the bounding box and the ground-truth can definitely be increased, but the current performance is most likely due to the very limited number of training images. This should be easy to fix with some data augmentation and model-tuning.
+Here are some predictions obtained from the model. As we can see, the model is able to succesfully detect the speed signs. The IOU between the bounding box and the ground-truth can definitely be increased, but the current performance is most likely due to the very low number of training epochs(2 epochs). This should be easy to fix with more training, giving a bigger weight to the loss function related to the bounding box, some data augmentation and model-tuning.
 
-![Prediction 1](./images/Figure_1.png)
+![Prediction 1](./images/Figure_1_simplesuccess.png)
 
-![Prediction 2](./images/Figure_3.png)
+![Prediction 2](./images/Figure_3_goodperformance.png)
 
-The following image shows that even with heavy distortion (caused by heatwaves), the model is still able to correctly identify the speed sign. In other words, the model is somewhat robust already.
+The model is also quite robust to hard scenarios: here, the model needs to detect the reflection of objects rather than objects themselves and actually does pretty well.
 
-![Prediction 3](./images/Figure_2_distorted.png)
+![Prediction 3](./images/Figure_4_hardscenario.png)
 
 ### Baseline weakpoints and edge cases
-These are the cases that need to be worked on in the next steps. In the first one, the sign is rotated sideways; the model is still able to detect it, but the bounding box is barely over the sign. In the second one, we see that the smaller sign on the left is split into two boxes.
+The baseline is obviously not perfect, as we can see in the following example. We see that some objects or not found (or are misclassified) by the model. 
 
-![Edge case 1](./images/Figure_4_sideways.png)
-
-![Edge case 2](./images/Figure_5_multiple.png)
+![Edge case 1](./images/Figure1_smallerrors.png)
 
 ## Label classification
-Label classification is currently functional. Objectness is generally good (the detector correctly sees the speed sign as an object of interest). However, performance is generally poor for the label classification and the detector outputs an almost equal probability for every speed limit. This is most likely due to the fact that images fed to the detector are heavily downsized compared to their original dimensions (in many cases they go from 1920 pixels to 512). It is possible that the written speed limit information is partially lost during the downsampling, which makes classification harder.
+Label classification is currently functional. Objectness is generally good (the detector correctly finds cars and people as objects of interest). However, performance is slightly worse when it comes to the bounding boxes dimensions. The boxes are correctly placed, but in most cases are bigger than they should be, which reduces IoU between the ground-truth and predicted boxes.
 
-This could possibly be due to a lack of data, or even to the fact that the current data augmentation has a small chance of flipping the image, which would obviously result in a different speed being shown on the sign. There are a few possible things to try in order to improve this part:
-1. Rather than using heatmaps to classify the signs, we could try a classical classifier (softmax classifier for N classes, where N is the number of speed limits). This technique probably has the highest chance of success. However, the downside is that it wouldn't work if there are multiple signs in the image (this isn't a multilabel classification problem, as each object has its specific category).
-2. Try adding more data
-3. Modify loss function to give more weight to the label classification, or even a penalty for wrong classification. This would theoretically force the model to learn to differentiate between classes.
-4. Images are currently resized using letterbox transform for the input to the network. A "dumb" resizing (not keeping aspect ratio) could possibly help.
+This could possibly be due to a lack of data. There are a few possible things to try in order to improve this part:
+1. Training for longer
+2. Giving a bigger weight to the part of the loss related to bounding box dimensions
+3. Data augmentation (simulate more data)
 
 ## Data augmentation
 Currently, the following transforms are supported for data augmentation:
@@ -62,8 +49,8 @@ During training, transforms are randomly applied to training image. However, the
 ### TO DO
 - [x] Add label classification
 - [x] Data is currently very limited, so I plan on adding data augmentation
-- [x] Adding MixUp data augmentation
 - [x] Adding support for multiple objects in an image(heatmap generation)
+- [ ] Adding MixUp data augmentation
 - [ ] Trying adversarial training for increased robustness
 
 ### References
