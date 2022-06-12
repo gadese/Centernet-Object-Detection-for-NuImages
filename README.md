@@ -13,18 +13,18 @@ The current version of the model is functional and able to localize the most of 
 ### Baseline example prediction
 Here are some predictions obtained from the model. As we can see, the model is able to succesfully detect the speed signs. The IOU between the bounding box and the ground-truth can definitely be increased, but the current performance is most likely due to the very low number of training epochs(2 epochs). This should be easy to fix with more training, giving a bigger weight to the loss function related to the bounding box, some data augmentation and model-tuning.
 
-![Prediction 1](./images/Figure_1_simplesuccess.png)
+![Prediction 1](./images/nuimages/Figure_1_simplesuccess.png)
 
-![Prediction 2](./images/Figure_3_goodperformance.png)
+![Prediction 2](./images/nuimages/Figure_3_goodperformance.png)
 
 The model is also quite robust to hard scenarios: here, the model needs to detect the reflection of objects rather than objects themselves and actually does pretty well.
 
-![Prediction 3](./images/Figure_4_hardscenario.png)
+![Prediction 3](./images/nuimages/Figure_4_hardscenario.png)
 
 ### Baseline weakpoints and edge cases
 The baseline is obviously not perfect, as we can see in the following example. We see that some objects or not found (or are misclassified) by the model. 
 
-![Edge case 1](./images/Figure1_smallerrors.png)
+![Edge case 1](./images/nuimages/Figure1_smallerrors.png)
 
 ## Label classification
 Label classification is currently functional. Objectness is generally good (the detector correctly finds cars and people as objects of interest). However, performance is slightly worse when it comes to the bounding boxes dimensions. The boxes are correctly placed, but in most cases are bigger than they should be, which reduces IoU between the ground-truth and predicted boxes.
