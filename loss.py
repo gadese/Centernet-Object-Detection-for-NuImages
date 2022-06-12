@@ -19,12 +19,9 @@ def focal_loss(y_true, y_pred):
 
     loss = focal_loss_with_logits(logits=logits, targets=y_true, alpha=alpha, gamma=gamma, y_pred=y_pred)
 
-    # or reduce_sum and/or axis=-1
     return tf.reduce_mean(loss)
 
 def regress_loss(y_true, y_pred): # Regression Loss
-    # mask = y_true[:,:,:, 0][:,:,:,np.newaxis]
-    # regr = y_true[:,:,:,1:]
     regr = y_true[:,:,:, -2:]
 
     regr_loss = mean_squared_error(regr, y_pred)
@@ -33,15 +30,13 @@ def regress_loss(y_true, y_pred): # Regression Loss
     return loss
 
 def conf_loss(y_true, y_pred): # Heatmap Loss
-    # mask = y_true[:,:,:, 0:-2]#[:,:,:,np.newaxis]
     mask = y_true
     prediction = y_pred
 
-    # Binary mask loss
-    # pred_mask = tf.sigmoid(prediction[:,:,:, 0])[:,:,:,np.newaxis]
     pred_mask = tf.sigmoid(prediction)
     mask_loss = focal_loss(mask, pred_mask)
     mask_loss = tf.reduce_mean(mask_loss)
 
     loss = mask_loss
+
     return loss

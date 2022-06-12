@@ -22,33 +22,22 @@ def normalize_image(image):
     std = [0.2886383, 0.27408165, 0.27809834]
     return ((np.float32(image) / 255.) - mean) / std
 
-def get_boxes(bbox):
-    boxes = []
-    for box in bbox:
-        box = box[1:-1].split(',')
-        box = [float(b) for b in box]
-        box = [int(b) for b in box]
-        boxes.append(box)
-
-    boxes = np.array(boxes, dtype=np.int32)
-    boxes = boxes * config.in_size // config.bbox_img_size #BOXES CHANGED
-    return boxes
-
-def heatmap(bbox, label):
-    def get_coords(bbox):
-        xs,ys,w,h=[],[],[],[]
-        for box in bbox:
+def heatmap_nu(bbox, label):
+    def get_coords(in_bbox):
+        xs,ys,wid,hei=[],[],[],[]
+        for box in in_bbox:
             box = [int(b) for b in box]
 
-            x1, y1, width, height = box
-            xs.append(x1+int(width/2))
-            ys.append(y1+int(height/2))
-            w.append(width)
-            h.append(height)
+            # NuImages are in the format [X1, Y1, X2, Y2]
+            x1, y1, x2, y2 = box
+            xs.append((x1 + x2)//2)
+            ys.append((y1 + y2)//2)
+            wid.append(abs(x2-x1))
+            hei.append(abs(y2-y1))
 
-        return xs, ys, w, h
+        return xs, ys, wid, hei
 
-    def get_heatmap(p_x, p_y,label):
+    def get_heatmap(p_x, p_y,in_label):
         # Ref: https://www.kaggle.com/diegojohnson/centernet-objects-as-points
         X1 = np.linspace(1, config.in_size, config.in_size)
         Y1 = np.linspace(1, config.in_size, config.in_size)
@@ -61,8 +50,8 @@ def heatmap(bbox, label):
         Exponent = D2 / E2
         heatmap = np.exp(-Exponent)
         # hm = heatmap[:, :, np.newaxis]
-        hm = np.zeros((config.in_size, config.in_size, config.num_classes))
-        hm[:,:,label] = heatmap
+        hm = np.zeros((config.in_size, config.in_size, config.num_classes_nu))
+        hm[:,:,in_label] = heatmap
         return hm
 
     coors = []
@@ -83,7 +72,7 @@ def heatmap(bbox, label):
         w = np.array([10])
         h = np.array([10])
 
-    hm = np.zeros((config.in_size,config.in_size,config.num_classes))
+    hm = np.zeros((config.in_size,config.in_size,config.num_classes_nu))
     width = np.zeros((config.in_size,config.in_size,1))
     height = np.zeros((config.in_size,config.in_size,1))
     for i in range(len(u)):
@@ -93,23 +82,20 @@ def heatmap(bbox, label):
                 height[int(v[i])+coor[0], int(u[i])+coor[1]] = h[i] / config.out_size
             except:
                 pass
-        # heatmap = get_heatmap(u[i], v[i], label)
         heatmap = get_heatmap(u[i], v[i], label[i])
         hm[:,:] = np.maximum(hm[:,:,:],heatmap[:,:,:])
 
     hm = cv2.resize(hm, (config.out_size,config.out_size))#[:,:,None]
     hm = hm / np.max(hm)
     width = cv2.resize(width, (config.out_size,config.out_size))[:,:,None]
-    # width[width > 0] = np.max(width)
     height = cv2.resize(height, (config.out_size,config.out_size))[:,:,None]
-    # height[height > 0] = np.max(height)
     return hm, width, height
 
 # # Dataset
 class DataGenerator(keras.utils.Sequence):
-    'Generates data for Keras'
+    """Generates data for Keras"""
     def __init__(self, df, mode='fit', batch_size=4, dim=(128, 128), n_channels=3,
-                 n_classes=3, shuffle=True, aug=1.0):#, nbr_batches=10):
+                 n_classes=3, shuffle=True, aug=1.0, val_gen=False):#, nbr_batches=10):
         self.dim = dim
         self.batch_size = batch_size
         self.df = df
@@ -121,32 +107,21 @@ class DataGenerator(keras.utils.Sequence):
         self.random_state = config.seed
         self.aug = aug
         self.dflength = int(np.floor(self.df.shape[0] / self.batch_size))
-        # self.nbr_batches = nbr_batches
+        self.val_gen = val_gen
 
         self.on_epoch_end()
 
     def __len__(self):
-        'Denotes the number of batches per epoch'
+        """Denotes the number of batches per epoch"""
         return self.dflength
-        # return int(np.floor(self.nbr_batches * self.batch_size))
 
     def __getitem__(self, index):
-        X, X_orig, bboxes, labels = self.get_img_box_pairs(index, aug=self.aug)
-        # X, X_orig, bboxes, labels = self.get_random_img_box_pairs(aug=self.aug)
+        X, X_orig, bboxes, labels = self.get_img_box_pairs_nu(index, aug=self.aug)
 
         if self.mode == 'fit':
-            y = self.__generate_y(bboxes, labels)
-            # y = self.__generate_y_multiboxes(bboxes_merged, labels_merged)
+            y = self._generate_y_multiboxes(bboxes, labels)
 
             return X, y
-        # if self.mode == 'fit':
-        #     y = self.__generate_y(bboxes, labels)
-        #
-        #     alpha = 0.3
-        #     lambd = np.clip(np.random.beta(alpha, alpha), 0.3, 0.7)#Minimum 0.3, maximum 0.7
-        #     X_mix = X[0] * lambd + X[1] * (1-lambd)
-        #     y_mix = [target.sum(axis=0, keepdims=True) for target in y]
-        #     return np.expand_dims(X_mix,axis=0), y_mix
 
         elif self.mode == 'predict':
             return np.array(X)
@@ -158,14 +133,13 @@ class DataGenerator(keras.utils.Sequence):
             raise AttributeError('The mode parameter should be set to "fit" or "predict" or "visualize".')
 
     def on_epoch_end(self):
-        'Updates indexes after each epoch'
+        """Updates indexes after each epoch"""
         self.indexes = np.arange(self.df.shape[0])
         if self.shuffle:
             np.random.seed(self.random_state)
             np.random.shuffle(self.indexes)
 
-    def get_img_box_pairs(self, index, aug=0):
-        'Generate one batch of data'
+    def get_img_box_pairs_nu(self, index, aug=0):
         indexes = self.indexes[index*self.batch_size:(index+1)*self.batch_size]
         items = [self.df.iloc[[k]].values[0] for k in indexes]
         imgNames = []
@@ -173,68 +147,39 @@ class DataGenerator(keras.utils.Sequence):
         labels = []
         for item in items:
             imgNames.append(item[0])
-            boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
-            labels.append(item[5])
-        Xs = self.__generate_X(imgNames)
+            boxes.append([[np.float64(coord) for coord in box] for box in item[1]])
+            labels.append(item[2])
+        Xs = self.__generate_X_nu(imgNames)
 
-        transforms = Sequence(self.random_aug(aug))
+        transforms = Sequence(self.random_aug_nu(aug))
         X, bboxes = [], []
 
         for im, box in zip(Xs, boxes):
-            im_, box_ = transforms(im, [box])
+            im_, box_ = transforms(im, box)
             X.append(im_)
             bboxes.append(box_)
 
         return np.array(X), np.array(Xs), np.array(bboxes), np.array(labels) #Image resized/normalized, Image original, bbox on resized
 
-    def get_random_img_box_pairs(self, aug=0, nbr2get=2):
-            'Generate one batch of data'
-            idxs = np.random.randint(0, high=self.dflength, size=nbr2get)
-            items = [self.df.iloc[[idx]].values[0] for idx in idxs]
-            imgNames = []
-            boxes = []
-            labels = []
-            for item in items:
-                imgNames.append(item[0])
-                boxes.append([np.float64(item[2]), np.float64(item[1]), np.float64(item[3]), np.float64(item[4])])
-                labels.append(item[5])
-            Xs = self.__generate_X(imgNames)
-
-            transforms = Sequence(self.random_aug(aug))
-            X, bboxes = [], []
-
-            for im, box in zip(Xs, boxes):
-                im_, box_ = transforms(im, [box])
-                X.append(im_)
-                bboxes.append(box_)
-
-            return np.array(X), np.array(Xs), np.array(bboxes), np.array(labels) #Image resized/normalized, Image original, bbox on resized
-
-    def __generate_X(self, imgNames):
-        'Generates data containing batch_size samples'
+    def __generate_X_nu(self, imgNames):
+        """Generates data containing batch_size samples"""
         X = []
 
-        for im_name in imgNames:
-            img_path = f"{self.base_path}{im_name}"
-            img = self.__load_rgb(img_path)
+        for img_path in imgNames:
+            parts = img_path.split('/')
+            newname = '/media/gadese/SSDexternal/Google Drive/NuImages/samples/'+parts[-2]+'/'+parts[-1]
+            img = self._load_rgb(newname)
 
             X.append(img)
 
-        # X = np.array(X)
         return np.array(X)
 
-    def __generate_y_multiboxes(self, all_bboxes, all_labels):
+    def _generate_y_multiboxes(self, all_bboxes, all_labels):
             y1 = []#width, height
             y2 = []#class and x,y
 
             for bboxes, labels in zip(all_bboxes, all_labels):
-                mask, width, height = heatmap(bboxes, labels)
-            # for bboxes, labels in zip(all_bboxes, all_labels):
-            #     masks, widths, heights = [], [], []
-            #     for bbox, label in bboxes, labels:
-            #         mask, width, height = heatmap(bbox, label)
-            #         masks.append(mask), widths.append(width), heights.append(height)
-                # mask = []
+                mask, width, height = heatmap_nu(bboxes, labels)
                 y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
                 y2.append(mask)
 
@@ -242,64 +187,35 @@ class DataGenerator(keras.utils.Sequence):
             y2 = np.array(y2)
             return [y1,y2]
 
-    def __generate_y(self, bboxes, labels):
-        y1 = []#width, height
-        y2 = []#class and x,y
-
-        for bbox, label in zip(bboxes, labels):
-            # left, top, width, height = bbox
-            # shape = shapes[i]
-
-            # bbox = [[left, top, width, height]]
-            mask, width, height = heatmap(bbox, label)
-            y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
-            y2.append(mask)
-
-            # top_resized = max(top * config.in_size // shape[0], 0)
-            # left_resized = max(left * config.in_size // shape[1], 0)
-            # height_resized = max(height * config.in_size // shape[0], 0)
-            # width_resized = max(width * config.in_size // shape[1], 0)
-            #
-            # bbox = [[left_resized, top_resized, width_resized, height_resized]]
-            # mask, width, height = heatmap(bbox, label)
-            # y1.append(np.concatenate([mask,width,height], axis=-1)) #heatmap for position/class, width, height
-            # y2.append(mask)
-
-        y1 = np.array(y1)
-        y2 = np.array(y2)
-        return [y1,y2]
-
-    def __load_grayscale(self, img_path):
+    def _load_grayscale(self, img_path):
         img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-        # img = cv2.resize(img, self.dim)
         img = img.astype(np.float32) / 255.
         img = np.expand_dims(img, axis=-1)
         return img
 
-    def __load_rgb(self, img_path, pair=False):
+    def _load_rgb(self, img_path, pair=False):
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-        # img = normalize_image(img)
 
         return img
 
-    def random_aug(self, prob=0.5):
-        augments = []
-        if random.random() < prob:
-            augments.append(RandomHorizontalFlip(0.2, dim2coord=True))
-        if random.random() < prob:
-            augments.append(RandomScale(0.1, diff=True, dim2coord=True))
-        if random.random() < prob:
-            augments.append(RandomTranslate(0.05, dim2coord=True))
-        if random.random() < prob:
-            augments.append(RandomRotate(10, dim2coord=True))
-        if random.random() < prob:
-            augments.append(RandomShear(0.05, dim2coord=True))
-        if random.random() < prob:
-            augments.append(RandomColorShift(0.1))
-        augments.append(Normalize()) #Move this before color shift?
-        augments.append(Resize((config.in_size, config.in_size), dim2coord=True))
-        # augments.append(SimpleResize((config.in_size, config.in_size)))
-        return augments
+    def random_aug_nu(self, prob=0.5):
+            augments = []
+            if not self.val_gen:
+              if random.random() < prob:
+                  augments.append(RandomHorizontalFlip(0.2, dim2coord=False))
+              if random.random() < prob:
+                  augments.append(RandomScale(0.1, diff=True, dim2coord=False))
+              if random.random() < prob:
+                  augments.append(RandomTranslate(0.05, dim2coord=False))
+              if random.random() < prob:
+                  augments.append(RandomRotate(10, dim2coord=False))
+              if random.random() < prob:
+                  augments.append(RandomShear(0.05, dim2coord=False))
+              if random.random() < prob:
+                  augments.append(RandomColorShift(0.1))
+            augments.append(Normalize())
+            augments.append(Resize((config.in_size, config.in_size), dim2coord=False))
+            return augments
 
 # # IOU/Precision Utils
 # Ref: https://www.kaggle.com/pestipeti/competition-metric-details-script
@@ -354,7 +270,7 @@ def find_best_match(gts, predd, threshold=0.5, form='pascal_voc'):
 
     Args:
         gts: Coordinates of the available ground-truth boxes
-        pred: Coordinates of the predicted box
+        predd: Coordinates of the predicted box
         threshold: Threshold
         form: Format of the coordinates
 
@@ -380,7 +296,10 @@ def calculate_precision(preds_sorted, gt_boxes, threshold=0.5, form='coco'):
     """Calculates precision per at one threshold.
 
     Args:
-        preds_sorted:
+        :param preds_sorted:
+        :param form:
+        :param threshold:
+        :param gt_boxes:
     """
     tp = 0
     fp = 0
@@ -430,13 +349,13 @@ def process_img(img, mode='training'):
 
     return img
 
-def show_result(test_img, sample_id, preds, gt_boxes, labels):
+def show_result(test_img, sample_id, preds, labels, gt_boxes, gt_labels, dimToCoordLabels=True):
     fig, ax = plt.subplots(1, 1, figsize=(16, 8))
     shape = test_img.shape
+    # print(shape)
 
     for idx, pred_box in enumerate(preds):
         fullsize_box = inverse_resize_bbox([pred_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
-        # fullsize_box = inverse_simpleresize_bbox([pred_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
         y1 = fullsize_box[1]
         x1 = fullsize_box[0]
         y2 = y1 + fullsize_box[3]
@@ -447,17 +366,25 @@ def show_result(test_img, sample_id, preds, gt_boxes, labels):
             (x2, y2),
             (220, 0, 0), 2
         )
-        cv2.putText(test_img, labels[idx], (x1, y1), cv2.FONT_HERSHEY_PLAIN, 2, (220, 0, 0), 2)
+        # cv2.putText(test_img, labels[idx], (x1, y1), cv2.FONT_HERSHEY_PLAIN, 2, (220, 0, 0), 2)
 
     if gt_boxes is not None:
-        for gt_box in gt_boxes:
-            fullsize_box = inverse_resize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
-            # fullsize_box = inverse_simpleresize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=True)[0]
-            y1gt = int(np.floor(fullsize_box[1]))
-            x1gt = int(np.floor(fullsize_box[0]))
-            y2gt = y1gt + int(np.floor(fullsize_box[3]))
-            x2gt = x1gt + int(np.floor(fullsize_box[2]))
+        for gt_idx, gt_box in enumerate(gt_boxes):
+            # print(gt_box)
+            fullsize_box = inverse_resize_bbox([gt_box], shape, (config.in_size, config.in_size), dimToCoord=dimToCoordLabels)[0]
+            # print(fullsize_box)
+            if dimToCoordLabels:
+              y1gt = int(np.floor(fullsize_box[1]))
+              x1gt = int(np.floor(fullsize_box[0]))
+              y2gt = y1gt + int(np.floor(fullsize_box[3]))
+              x2gt = x1gt + int(np.floor(fullsize_box[2]))
+            else:
+              y1gt = int(fullsize_box[1])
+              x1gt = int(fullsize_box[0])
+              y2gt = int(fullsize_box[3])
+              x2gt = int(fullsize_box[2])
             cv2.rectangle(test_img, (x1gt, y1gt), (x2gt, y2gt), (0, 0, 220), 2)
+            # cv2.putText(test_img, gt_labels[gt_idx], (x1gt, y2gt), cv2.FONT_HERSHEY_PLAIN, 2, (0, 0, 220), 2)
 
     ax.set_axis_off()
     ax.imshow(test_img)
@@ -465,14 +392,13 @@ def show_result(test_img, sample_id, preds, gt_boxes, labels):
     plt.show()
 
 def calcmAP(decoded_model, threshold=0.3, datagen = None):
-  # model_ = add_decoder(model)
 
   iou_thresholds = [x for x in np.arange(0.5, 0.76, 0.05)]
 
   precision = []
 
   for idx in range(len(datagen)):
-      img_test, img_test_orig, boxes, _ = datagen.get_img_box_pairs(idx)
+      img_test, img_test_orig, boxes, _ = datagen.get_img_box_pairs_nu(idx)
       decoded_pred = decoded_model.predict(img_test)
 
       for i in range(decoded_pred.shape[0]):

@@ -3,6 +3,7 @@ import tensorflow.keras.backend as K
 from tensorflow.keras.layers import Dense, Activation, Input, Conv2D, BatchNormalization, Add, UpSampling2D, ZeroPadding2D, Lambda, Concatenate, Dropout, SpatialDropout2D
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.utils import get_file
+from tensorflow.nn import max_pool2d
 
 from trainingconfig import config
 
@@ -168,41 +169,54 @@ def create_heads(heads, rf1, hgid):
 
 # # Decoder
 def _nms(heat, kernel=3):
-    hmax = K.pool2d(heat, (kernel, kernel), padding='same', pool_mode='max')
-    keep = K.cast(K.equal(hmax, heat), K.floatx())
+    # hmax = K.pool2d(heat, (kernel, kernel), padding='same', pool_mode='max')
+    hmax = max_pool2d(heat, (kernel, kernel), strides = (1, 1), padding='SAME')
+    # keep = K.cast(K.equal(hmax, heat), K.floatx())
+    keep = tf.cast(tf.math.equal(hmax, heat), tf.float32)
     return heat * keep
 
 def decode_ddd(regr, hm_, k, output_stride):
-    # hm = K.sigmoid(K.expand_dims(hm_[:,:,:,0])) #Might need to change this line to softmax when more classes
-    hm = K.sigmoid(hm_)
+    # hm = K.sigmoid(hm_)
+    hm = tf.math.sigmoid(hm_)
     hm = _nms(hm)
-    hm_shape = K.shape(hm)
-    regr_shape = K.shape(regr)
+    # hm_shape = K.shape(hm)
+    hm_shape = tf.shape(hm)
+    # regr_shape = K.shape(regr)
+    regr_shape = tf.shape(regr)
     batch, width, cat = hm_shape[0], hm_shape[2], hm_shape[3]
 
-    hm_flat = K.reshape(hm, (batch, -1))
-    regr_flat = K.reshape(regr, (regr_shape[0], -1, regr_shape[-1]))
+    # hm_flat = K.reshape(hm, (batch, -1))
+    # regr_flat = K.reshape(regr, (regr_shape[0], -1, regr_shape[-1]))
+    hm_flat = tf.reshape(hm, (batch, -1))
+    regr_flat = tf.reshape(regr, (regr_shape[0], -1, regr_shape[-1]))
 
     def _process_sample(args):
         _hm, _regr = args
         _scores, _inds = tf.math.top_k(_hm, k=k, sorted=True)
-        _classes = K.cast(_inds % cat, 'float32')
-        _inds = K.cast(_inds / cat, 'int32')
-        _xs = K.cast(_inds % width, 'float32')
-        _ys = K.cast(K.cast(_inds / width, 'int32'), 'float32')
+        # _classes = K.cast(_inds % cat, 'float32')
+        # _inds = K.cast(_inds / cat, 'int32')
+        # _xs = K.cast(_inds % width, 'float32')
+        # _ys = K.cast(K.cast(_inds / width, 'int32'), 'float32')
+        _classes = tf.cast(_inds % cat, 'float32')
+        _inds = tf.cast(_inds / cat, 'int32')
+        _xs = tf.cast(_inds % width, 'float32')
+        _ys = tf.cast(tf.cast(_inds / width, 'int32'), 'float32')
         _xs *= output_stride
         _ys *= output_stride
 
-        _regr = K.gather(_regr, _inds)
+        # _regr = K.gather(_regr, _inds)
+        _regr = tf.gather(_regr, _inds)
 
 
         _width = _regr[:,0] * config.out_size#//2
         _height = _regr[:,1] * config.out_size#//2
 
-        _detection = K.stack([_xs, _ys, _scores, _classes, _width, _height], -1)
+        # _detection = K.stack([_xs, _ys, _scores, _classes, _width, _height], -1)
+        _detection = tf.stack([_xs, _ys, _scores, _classes, _width, _height], -1)
         return _detection
 
-    detections = K.map_fn(_process_sample, [hm_flat, regr_flat], dtype=K.floatx())
+    # detections = K.map_fn(_process_sample, [hm_flat, regr_flat], dtype=K.floatx())
+    detections = tf.map_fn(_process_sample, [hm_flat, regr_flat], dtype=tf.float32)
     return detections
 
 def add_decoder(model, k=125, output_stride=4):

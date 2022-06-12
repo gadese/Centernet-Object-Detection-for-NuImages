@@ -1,9 +1,4 @@
 import random
-import numpy as np
-import cv2
-import matplotlib.pyplot as plt
-import sys
-import os
 
 from bbox_aug_utils import *
 
@@ -15,7 +10,7 @@ class Sequence(object):
 
     Parameters
     ----------
-    augemnetations : list
+    augmentations : list
         List containing Transformation Objects in Sequence they are to be
         applied
 
@@ -40,6 +35,7 @@ class Sequence(object):
         self.probs = probs
 
     def __call__(self, images, bboxes):
+        bboxes = np.array(bboxes)
         for i, augmentation in enumerate(self.augmentations):
             if type(self.probs) == list:
                 prob = self.probs[i]
@@ -48,6 +44,7 @@ class Sequence(object):
 
             if random.random() < prob:
                 images, bboxes = augmentation(images, bboxes)#plt.imshow(draw_rect(images, bboxes)); plt.show()
+                # plt.imshow(draw_rect_nu(images, bboxes, dim2coord_=False)); plt.show()
         return images, bboxes
 
 class RandomHorizontalFlip(object):
@@ -57,7 +54,7 @@ class RandomHorizontalFlip(object):
     Parameters
     ----------
     p: float - The probability with which the image is flipped
-    dim2coord: bool - Whether or not to change bounding boxes from (x,y,width,height) to (x1,y1,x2,y2)
+    dim2coord: bool - Whether to change bounding boxes from (x,y,width,height) to (x1,y1,x2,y2)
 
     Returns
     -------
@@ -108,8 +105,8 @@ class RandomScale(object):
         randomly from a range (1 - `scale` , 1 + `scale`). If **tuple**,
         the `scale` is drawn randomly from values specified by the
         tuple
-    dim2coord: bool - Whether or not to change bounding boxes from (x,y,width,height) to (x1,y1,x2,y2)
-    diff: bool - Whether or not to keep aspect ratio (if False, ratio is maintained)
+    dim2coord: bool - Whether to change bounding boxes from (x,y,width,height) to (x1,y1,x2,y2)
+    diff: bool - Whether to keep aspect ratio (if False, ratio is maintained)
 
     Returns
     -------
@@ -533,17 +530,6 @@ class RandomColorShift(object):
         img = np.clip(img, 0, 255)
 
         return img, bboxes
-
-def normalize_image(image):
-    """Normalize the image for the Hourglass network.
-    # Arguments
-      image: BGR uint8
-    # Returns
-      float32 image with the same shape as the input
-    """
-    mean = [0.40789655, 0.44719303, 0.47026116]
-    std = [0.2886383, 0.27408165, 0.27809834]
-    return ((np.float32(image) / 255.) - mean) / std
 
 class Normalize(object):
     """Normalizes the image according to pre-training data
